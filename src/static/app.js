@@ -3,6 +3,113 @@ document.addEventListener("DOMContentLoaded", () => {
   const activitySelect = document.getElementById("activity");
   const signupForm = document.getElementById("signup-form");
   const messageDiv = document.getElementById("message");
+  const loginForm = document.getElementById("login-form");
+  const loginMessage = document.getElementById("login-message");
+  const userBtn = document.getElementById("user-btn");
+  const loginModal = document.getElementById("login-modal");
+  const closeBtn = document.querySelector(".close");
+  const logoutBtn = document.getElementById("logout-btn");
+  const logoutSection = document.getElementById("logout-section");
+  const loggedInUser = document.getElementById("logged-in-user");
+  const signupContainer = document.getElementById("signup-container");
+
+  let currentUser = null;
+
+  // Load user from session storage
+  function loadUserSession() {
+    const savedUser = sessionStorage.getItem("currentUser");
+    if (savedUser) {
+      currentUser = savedUser;
+      updateUIForUser();
+    }
+  }
+
+  // Update UI based on user login status
+  function updateUIForUser() {
+    if (currentUser) {
+      loginForm.style.display = "none";
+      logoutSection.style.display = "block";
+      loggedInUser.textContent = `Logged in as: ${currentUser}`;
+      signupContainer.classList.remove("hidden");
+      userBtn.style.backgroundColor = "#4CAF50";
+    } else {
+      loginForm.style.display = "block";
+      logoutSection.style.display = "none";
+      signupContainer.classList.add("hidden");
+      userBtn.style.backgroundColor = "#2196F3";
+    }
+    fetchActivities();
+  }
+
+  // Modal functionality
+  userBtn.addEventListener("click", () => {
+    loginModal.classList.toggle("hidden");
+  });
+
+  closeBtn.addEventListener("click", () => {
+    loginModal.classList.add("hidden");
+  });
+
+  window.addEventListener("click", (event) => {
+    if (event.target === loginModal) {
+      loginModal.classList.add("hidden");
+    }
+  });
+
+  // Login handler
+  loginForm.addEventListener("submit", async (event) => {
+    event.preventDefault();
+    const username = document.getElementById("username").value;
+    const password = document.getElementById("password").value;
+
+    try {
+      const response = await fetch(
+        `/login?username=${encodeURIComponent(username)}&password=${encodeURIComponent(password)}`,
+        {
+          method: "POST",
+        }
+      );
+
+      const result = await response.json();
+
+      if (response.ok) {
+        currentUser = username;
+        sessionStorage.setItem("currentUser", username);
+        loginMessage.textContent = result.message;
+        loginMessage.className = "success";
+        loginForm.reset();
+        updateUIForUser();
+        setTimeout(() => {
+          loginMessage.classList.add("hidden");
+        }, 3000);
+      } else {
+        loginMessage.textContent = result.detail || "Login failed";
+        loginMessage.className = "error";
+      }
+
+      loginMessage.classList.remove("hidden");
+    } catch (error) {
+      loginMessage.textContent = "Failed to login. Please try again.";
+      loginMessage.className = "error";
+      loginMessage.classList.remove("hidden");
+      console.error("Error logging in:", error);
+    }
+  });
+
+  // Logout handler
+  logoutBtn.addEventListener("click", async () => {
+    try {
+      await fetch(`/logout?username=${encodeURIComponent(currentUser)}`, {
+        method: "POST",
+      });
+      currentUser = null;
+      sessionStorage.removeItem("currentUser");
+      updateUIForUser();
+      loginModal.classList.add("hidden");
+    } catch (error) {
+      console.error("Error logging out:", error);
+    }
+  });
 
   // Function to fetch activities from API
   async function fetchActivities() {
@@ -21,7 +128,7 @@ document.addEventListener("DOMContentLoaded", () => {
         const spotsLeft =
           details.max_participants - details.participants.length;
 
-        // Create participants HTML with delete icons instead of bullet points
+        // Create participants HTML with delete icons (only if logged in)
         const participantsHTML =
           details.participants.length > 0
             ? `<div class="participants-section">
@@ -30,7 +137,11 @@ document.addEventListener("DOMContentLoaded", () => {
                 ${details.participants
                   .map(
                     (email) =>
-                      `<li><span class="participant-email">${email}</span><button class="delete-btn" data-activity="${name}" data-email="${email}">❌</button></li>`
+                      `<li><span class="participant-email">${email}</span>${
+                        currentUser
+                          ? `<button class="delete-btn" data-activity="${name}" data-email="${email}">❌</button>`
+                          : ""
+                      }</li>`
                   )
                   .join("")}
               </ul>
@@ -77,7 +188,7 @@ document.addEventListener("DOMContentLoaded", () => {
       const response = await fetch(
         `/activities/${encodeURIComponent(
           activity
-        )}/unregister?email=${encodeURIComponent(email)}`,
+        )}/unregister?email=${encodeURIComponent(email)}&username=${encodeURIComponent(currentUser)}`,
         {
           method: "DELETE",
         }
@@ -121,7 +232,7 @@ document.addEventListener("DOMContentLoaded", () => {
       const response = await fetch(
         `/activities/${encodeURIComponent(
           activity
-        )}/signup?email=${encodeURIComponent(email)}`,
+        )}/signup?email=${encodeURIComponent(email)}&username=${encodeURIComponent(currentUser)}`,
         {
           method: "POST",
         }
@@ -148,13 +259,13 @@ document.addEventListener("DOMContentLoaded", () => {
         messageDiv.classList.add("hidden");
       }, 5000);
     } catch (error) {
-      messageDiv.textContent = "Failed to sign up. Please try again.";
+      messageDiv.textContent = "Failed to register student. Please try again.";
       messageDiv.className = "error";
       messageDiv.classList.remove("hidden");
-      console.error("Error signing up:", error);
+      console.error("Error registering:", error);
     }
   });
 
   // Initialize app
-  fetchActivities();
+  loadUserSession();
 });
